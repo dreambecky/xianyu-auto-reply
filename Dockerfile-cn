@@ -107,7 +107,10 @@ RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.c
 COPY . .
 
 # 安装Playwright浏览器（必须在复制项目文件之后）
-RUN playwright install chromium && \
+# 国内服务器走 npmmirror 镜像：官方 cdn.playwright.dev 会跳转到 storage.googleapis.com，
+# 实测国内约 40KB/s，191MB 需一小时以上；镜像源同版本文件可直接命中。
+RUN PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright \
+    playwright install chromium && \
     playwright install-deps chromium
 
 # 创建必要的目录并设置权限

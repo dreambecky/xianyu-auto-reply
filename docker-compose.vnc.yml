@@ -1,0 +1,19 @@
+# 可选：遇到闲鱼滑块验证、需要人工在浏览器里接管时临时启用。
+# 用法（叠加在主配置之后）：
+#   docker compose --env-file .env.prod \
+#     -f docker-compose.prod.yml -f docker-compose.vnc.yml up -d
+#
+# 端口只绑定 127.0.0.1，请通过 SSH 隧道访问，切勿映射到公网：
+#   ssh -L 6080:127.0.0.1:6080 user@server
+#   本地浏览器打开 http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale
+# 处理完滑块后务必去掉本文件、重建容器，恢复无 VNC 的常态运行。
+services:
+  xianyu-app:
+    ports:
+      - "127.0.0.1:5900:5900"
+      - "127.0.0.1:6080:6080"
+    environment:
+      USE_XVFB: "true"
+      ENABLE_HEADFUL: "true"
+      ENABLE_VNC: "true"
+      DISPLAY: ":99"

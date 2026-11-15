@@ -733,6 +733,7 @@ utils/*.dist/**
 .env
 .env.*
 !.env.example
+!.env.prod.example
 *.local.yml
 *.dev.yml
 *.test.yml

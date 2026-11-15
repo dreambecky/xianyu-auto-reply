@@ -1,0 +1,75 @@
+# 生产部署编排 —— 在仓库根目录执行
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# 与仓库默认 docker-compose.yml 的区别：
+#   1. 只监听 127.0.0.1:9000，由宿主机 Nginx 做 HTTPS 反代（不直接把管理后台暴露公网）
+#   2. 不挂载 .:/app 源码目录，使用镜像内构建好的代码，避免宿主机文件覆盖镜像
+#   3. 关闭无密码 VNC / noVNC（5900、6080）与 Xvfb 有头模式，需要时叠加 docker-compose.vnc.yml
+#   4. 关闭 SQL 日志、限制容器日志体积、设置内存/CPU 上限
+#   5. 强制设置 SECRET_ENCRYPTION_KEY（用于加密库中的 Cookie 等敏感字段）
+#   注意：README 中的 ADMIN_PASSWORD / JWT_SECRET_KEY 环境变量在本版本代码中并未被读取，
+#        默认管理员密码由 deploy-prod.sh 在首次启动后直接改库处理。
+services:
+  xianyu-app:
+    build:
+      context: .
+      dockerfile: ${BUILD_DOCKERFILE:-Dockerfile-cn}
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.11-slim-bookworm}
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.22.2-bookworm-slim}
+    image: xianyu-auto-reply-fix:prod
+    container_name: xianyu-auto-reply-fix
+    restart: unless-stopped
+    init: true
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-c", "bash /app/entrypoint.sh"]
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-9000}:8090"
+    volumes:
+      - ./data:/app/data:rw
+      - ./logs:/app/logs:rw
+      - ./backups:/app/backups:rw
+      - ./static/uploads:/app/static/uploads:rw
+      - ./global_config.yml:/app/global_config.yml:ro
+    environment:
+      TZ: Asia/Shanghai
+      API_HOST: 0.0.0.0
+      API_PORT: "8090"
+      DB_PATH: /app/data/xianyu_data.db
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: "false"
+      RELOAD: "false"
+      SQL_LOG_ENABLED: "false"
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?请在 .env.prod 中配置 SECRET_ENCRYPTION_KEY}
+      AUTO_REPLY_ENABLED: "true"
+      AUTO_DELIVERY_ENABLED: "true"
+      AUTO_DELIVERY_TIMEOUT: "30"
+      AI_REPLY_ENABLED: "false"
+      WEBSOCKET_URL: wss://wss-goofish.dingtalk.com/
+      USE_XVFB: "false"
+      ENABLE_HEADFUL: "false"
+      ENABLE_VNC: "false"
+    networks:
+      - xianyu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-2048}M
+          cpus: "${CPU_LIMIT:-2.0}"
+
+networks:
+  xianyu-network:
+    driver: bridge
